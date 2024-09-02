@@ -21,7 +21,7 @@ header("WapkaImgProcessor: iRobot");
 
 $CONFIG = [];
 $CONFIG['DB_SERVER'] = '89.117.63.148'; //database server IP
-$CONFIG['DB_HOST'] = $CONFIG['SERVER_IP'] == $CONFIG['DB_SERVER'] ? 'localhost' : $CONFIG['DB_SERVER'];
+$CONFIG['DB_HOST'] = $CONFIG['DB_SERVER'];
 $CONFIG['DB_NAME'] = 'wapka_db';
 $CONFIG['DB_USER'] = 'admin';
 $CONFIG['DB_PASSWORD'] = '8SbFLcxKdaFzQPQU';
@@ -67,6 +67,14 @@ $redisClient->connect('89.117.63.148', 6379);
 //$redisClient->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_JSON);
 $redisClient->setOption(Redis::OPT_PREFIX, 'wapka_img:');
 
+$redis->pfAdd("visitor", [
+	$_SERVER['REQUEST_METHOD'] ?? '',
+	$_SERVER["HTTP_HOST"] . $_SERVER['REQUEST_URI'],
+	$_SERVER['HTTP_REFERER'] ?? '',
+	$_SERVER['HTTP_USER_AGENT'] ?? '',
+	$_SERVER['HTTP_ACCEPT'] ?? '',
+	$_SERVER['REQUEST_TIME'] ?? ''
+]);
 $db = new Mysqlidb(['host' => $CONFIG['DB_HOST'], 'username' => $CONFIG['DB_USER'], 'password' => $CONFIG['DB_PASSWORD'], 'db' => $CONFIG['DB_NAME'], 'charset' => 'utf8mb4']);
 
 $fileKey = $match['id'];
