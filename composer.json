@@ -1,0 +1,8 @@
+{
+    "require": {
+        "james-heinrich/getid3": "^1.9",
+        "thingengineer/mysqli-database-class": "dev-master",
+        "predis/predis": "^2.2",
+        "guzzlehttp/guzzle": "^7.0"
+    }
+}
