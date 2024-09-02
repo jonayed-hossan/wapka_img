@@ -8,10 +8,12 @@ Make Thumbnail Size Smaller.
 
 define('DIR_ROOT', __DIR__);
 date_default_timezone_set("UTC");
-define('TEMP_DIR', "/var/www/app/filemanager/temp_files/");
-define('FM_DIR', "/var/www/app/filemanager/wapka_cdn/");
+define('TEMP_DIR', "/var/www/app/filemanager/temp_files/"); //temporary file
+define('FM_DIR', "/var/www/app/filemanager/wapka_cdn/"); //orginal wapka file
+define('IMG_DIR', "/var/www/app/filemanager/wapka_img/"); //thumbnail file
 
 require_once __DIR__ . "/vendor/autoload.php";
+
 ignore_user_abort(true);
 set_time_limit(600);
 
@@ -49,14 +51,15 @@ if (!is_dir(FM_DIR)) {
 	@mkdir(FM_DIR, 0777, true);
 }
 
-$img = TEMP_DIR . $match[0];
 
-if (is_readable($img) && filesize($img) > 0) {
-	header("content-type: " . mime_content_type($img));
-	readfile($img);
-	exit();
+foreach ([IMG_DIR, FM_DIR, TEMP_DIR] as $dir_name) {
+	$img = $dir_name . $match[0];
+	if (is_readable($img) && filesize($img) > 0) {
+		header("content-type: " . mime_content_type($img));
+		readfile($img);
+		exit();
+	}
 }
-
 
 $redisClient = new \Predis\Client($CONFIG['REDIS_SERVER'][0], ['prefix' => 'wapka_img:']); //connect to redis server
 
@@ -90,6 +93,15 @@ if (!empty($fileInfo['thumb']) && isset($fileid)) {
 		http_response_code(301);
 		header("location: " . $fileInfo['thumb']);
 		exit();
+	} else {
+		foreach ([IMG_DIR, FM_DIR, TEMP_DIR] as $dir_name) {
+			$img = $dir_name . $fileInfo['thumb'];
+			if (is_readable($img) && filesize($img) > 0) {
+				header("content-type: " . mime_content_type($img));
+				readfile($img);
+				exit();
+			}
+		}
 	}
 }
 
@@ -98,14 +110,21 @@ if (empty($fileInfo['thumb']) && $thumb = $db->where('sum', $fileInfo['sum'])->w
 	$fileInfo['thumb'] = $thumb;
 	//header("location: " . "/" . $fileInfo['thumb']); //share img from old file
 	//exit();
+	foreach ([IMG_DIR, FM_DIR, TEMP_DIR] as $dir_name) {
+		$img = $dir_name . $fileInfo['thumb'];
+		if (is_readable($img) && filesize($img) > 0) {
+			header("content-type: " . mime_content_type($img));
+			readfile($img);
+			exit();
+		}
+	}
 }
 
 //generate new thumbnail
-$path = FM_DIR . $fileInfo['sum'] . '.dat';
-$is_allowed = $fileInfo['size'] <= 1024 * 1024 * 100 ? true : true; //allow all
+$path = $filepath = FM_DIR . $fileInfo['sum'] . '.dat';
 
-if (!file_exists($path) && $is_allowed) {
-	$temp_path = $path . time();
+if (!file_exists($filepath) || filesize($filepath) !== $fileInfo['size']) {
+	$temp_path = $filepath . time();
 	$HttpClient = new \GuzzleHttp\Client(['base_uri' => "https://r2cdn.tgs3.org", 'http_errors' => true]);
 	$HttpClient->request('GET', "/wapka_cdn/{$fileInfo['sum']}.dat", [
 		'sink' => $temp_path,
@@ -118,41 +137,42 @@ if (!file_exists($path) && $is_allowed) {
 	]);
 
 	if (@filesize($temp_path) === $fileInfo['size']) {
-		rename($temp_path, $path);
+		rename($temp_path, $filepath);
 	} else {
 		@unlink($temp_path);
 	}
 }
 
-if (!file_exists($path) || filesize($path) !== $fileInfo['size']) {
+if (!file_exists($filepath) || filesize($filepath) !== $fileInfo['size']) {
 	http_response_code(503);
-	if (is_writable($path)) {
-		unlink($path); //remove partial file
+	if (is_writable($filepath)) {
+		unlink($filepath); //remove partial file
 	}
 	sleep(3);
 	exit("Currently We can't Process Thumbnail For this file. Try again Later...!"); //return false;
 }
 
-$mime =  mime_content_type($path);
-$imgpath = TEMP_DIR . basename($path);
+$mime =  mime_content_type($filepath);
+$imgpath = TEMP_DIR . basename($filepath);
 if (!is_executable($ffmpeg = __DIR__ . "/bin/ffmpeg")) { //if static build is runable
 	$ffmpeg = "ffmpeg"; //static binary: https://johnvansickle.com/ffmpeg/
 }
+
 switch ($type = explode("/", $mime)[0]) {
 	case "audio":
 		$getID3 = new \getID3;
-		$tags = $getID3->analyze($path);
+		$tags = $getID3->analyze($filepath);
 		if (isset($tags['comments']['picture']['0']['data']) && file_put_contents($imgpath, $tags['comments']['picture']['0']['data'])) {
 			//OK
 		} else {
-			exec("{$ffmpeg} -i '{$path}' {$imgpath}.jpg && mv -v {$imgpath}.jpg {$imgpath}"); //try using ffmpeg
+			exec("{$ffmpeg} -i '{$filepath}' {$imgpath}.jpg && mv -v {$imgpath}.jpg {$imgpath}"); //try using ffmpeg
 		}
 		break;
 	case "video":
-		exec("{$ffmpeg} -i '{$path}' -vf  \"thumbnail,scale=400:400\" -frames:v 1 {$imgpath}.jpg && mv -v {$imgpath}.jpg {$imgpath}");
+		exec("{$ffmpeg} -i '{$filepath}' -vf  \"thumbnail,scale=400:400\" -frames:v 1 {$imgpath}.jpg && mv -v {$imgpath}.jpg {$imgpath}");
 		break;
 	case "image":
-		copy($path, $imgpath);
+		copy($filepath, $imgpath);
 		break;
 	default:
 		header("ERROR: NO Thumb for {$mime}");
