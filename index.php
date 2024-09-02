@@ -61,7 +61,11 @@ foreach ([IMG_DIR, FM_DIR, TEMP_DIR] as $dir_name) {
 	}
 }
 
-$redisClient = new \Predis\Client($CONFIG['REDIS_SERVER'][0], ['prefix' => 'wapka_img:']); //connect to redis server
+//$redisClient = new \Predis\Client($CONFIG['REDIS_SERVER'][0], ['prefix' => 'wapka_img:']); //connect to redis server
+$redisClient = new \Redis();
+$redisClient->connect('89.117.63.148', 6379);
+//$redisClient->setOption(Redis::OPT_SERIALIZER, Redis::SERIALIZER_JSON);
+$redisClient->setOption(Redis::OPT_PREFIX, 'wapka_img:');
 
 $db = new Mysqlidb(['host' => $CONFIG['DB_HOST'], 'username' => $CONFIG['DB_USER'], 'password' => $CONFIG['DB_PASSWORD'], 'db' => $CONFIG['DB_NAME'], 'charset' => 'utf8mb4']);
 
